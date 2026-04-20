@@ -1,9 +1,6 @@
-# This is the first real CI workflow in the course.
-# It verifies a change by running tests on a fresh runner.
 name: 02 CI Workflow
 
 on:
-  # Run automatically when app code, tests, or this workflow file changes.
   pull_request:
     branches:
       - main
@@ -11,46 +8,39 @@ on:
       - synchronize
       - opened
       - reopened
+
 env:
   IMAGE_NAME: github_actions_assesment
 
 jobs:
   run-tests:
-    # The runner is the temporary machine that executes the steps below.
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
-        # Download the repository contents onto the runner.
         uses: actions/checkout@v6
 
       - name: Set up Python
-        # Prepare Python on the runner. This does not change the student laptop.
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Run tests
-        # This is the key verification step in the CI workflow.
         run: python -m unittest discover -s tests -v
 
   build-package:
-    # Use a fresh GitHub-hosted runner for the build.
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
-        # Get the repository files onto the runner.
         uses: actions/checkout@v6
 
       - name: Set up Python
-        # Prepare Python so the workflow can run the tests first.
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Run tests
-        # Build only after the verification step passes.
         run: python -m unittest discover -s tests -v
 
       - name: Configure AWS credentials
@@ -65,24 +55,21 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set image tag
-        # Use today's UTC date plus the GitHub run ID.
-        # This keeps the tag easy to explain and still unique for the run.
         id: image-tag
         run: |
           TODAY="$(date -u +%Y-%m-%d)"
           IMAGE_TAG="${TODAY}-${GITHUB_RUN_ID}"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Build Docker image with docker build
-        # Create the packaged application image with one traceable tag.
-        # The deploy workflow will run this exact same tag later.
+      - name: Build, tag, and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.image-tag.outputs.image_tag }}
         run: |
           docker build \
-            -t "${IMAGE_NAME}:latest" \
-            -t "${IMAGE_NAME}:${{ steps.image-tag.outputs.image_tag }}" \
+            -t $ECR_REGISTRY/$IMAGE_NAME:latest \
+            -t $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
             .
 
-      - name: tag, and push image
-        run: |
-          docker build -t "${{secrets.ECR_REGISTRY}}/${IMAGE_NAME}:latest" .
-          docker push "${{secretsECR_REGISTRY}}/${IMAGE_NAME}:latest"
+          docker push $ECR_REGISTRY/$IMAGE_NAME:latest
+          docker push $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
