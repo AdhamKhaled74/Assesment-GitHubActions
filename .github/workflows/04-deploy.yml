@@ -1,5 +1,5 @@
 name: 04 Deploy to EC2 from ECR
-
+# 04 Deploy to EC2 from ECR
 on:
   push:
     branches: [main]
